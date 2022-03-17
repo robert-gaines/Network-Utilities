@@ -8,9 +8,11 @@ try:
     from PyQt5.QtCore import *
     from PyQt5.QtGui import *
     import subprocess
+    import xlsxwriter
     import ipaddress
     import logging
     import time
+    import csv
     import sys
     import os
 except Exception as e:
@@ -79,8 +81,7 @@ class Window(QWidget):
         "240.0.0.0",
         "224.0.0.0",
         "192.0.0.0",
-        "128.0.0.0",
-        "0.0.0.0" ] 
+        "128.0.0.0", ] 
         #
         super().__init__(parent)
         #
@@ -195,19 +196,80 @@ class Window(QWidget):
         main_layout.addRow(self.export_button_box)
         main_layout.addRow(self.horizontal_button_box)
         #
+        self.reset_button.clicked.connect(self.ResetTable)
+        self.export_text_button.clicked.connect(self.ExportToTextFile)
+        self.export_csv_button.clicked.connect(self.ExportToCSVFile)
+        self.export_xlsx_button.clicked.connect(self.ExportToXLSX)
+        #
         self.ping_button.clicked.connect(self.ExecuteSweep)
         self.stop_button.clicked.connect(self.Terminate)
         #
         self.setLayout(main_layout)
 
-    def AddTableRow(self,table,data):
-        current_row = table.rowCount()
-        table.setRowCount(current_row+1)
-        column_value = 0
-        for item in data:
-            cell_value = QTableWidgetItem(str(item))
-            table.setItem(current_row,column_value,cell_value)
-            column_value =+ 1
+    def GenerateFilename(self,network,file_type):
+        valid_types = ['.txt','.csv','.xlsx']
+        if(file_type in valid_types):
+            timestamp = time.ctime()
+            timestamp = timestamp.replace(' ','_')
+            timestamp = timestamp.replace(':','_')
+            filename  = str(network)+'_'+timestamp+'_'+file_type
+            return filename
+        else:
+            return 'UnrecognizedFileExtension'
+
+    def ExportToTextFile(self):
+        try:
+            network = self.target_network.split("/")[0]
+            self.filename = self.GenerateFilename(network,'.txt')
+            self.fileObject = open(self.filename,'w')
+            for host in self.live_hosts:
+                self.fileObject.write("Alive->"+str(host))
+                self.fileObject.write('\n')
+            self.fileObject.close()
+        except:
+            sys.exit(1)
+
+    def ExportToCSVFile(self):
+        try:
+            network = self.target_network.split("/")[0]
+            self.filename = self.GenerateFilename(network,'.csv')
+            with open(self.filename,'w',newline='') as csvfile:
+                host_writer = csv.writer(csvfile,delimiter=',')
+                for host in self.live_hosts:
+                    entry = [str(host),'Alive']
+                    host_writer.writerow(entry)
+        except:
+            sys.exit(1)
+
+    def ExportToXLSX(self):
+        try:
+            network = self.target_network.split("/")[0]
+            self.filename = self.GenerateFilename(network,'.xlsx')
+            workbook = xlsxwriter.Workbook(self.filename)
+            live_hosts_worksheet = workbook.add_worksheet('Responsive Hosts')
+            live_hosts_worksheet.set_column('A:A',20)
+            down_hosts_worksheet = workbook.add_worksheet('Unresponsive Hosts')
+            down_hosts_worksheet.set_column('A:A',20)
+            row_index   =  1
+            alpha_index = 'A'
+            write_index = alpha_index + str(row_index)
+            live_hosts_worksheet.write(write_index,'IP Address')
+            down_hosts_worksheet.write(write_index,'IP Address')
+            row_index += 1
+            for host in self.live_hosts:
+                addr = str(host)
+                write_index = alpha_index + str(row_index)
+                live_hosts_worksheet.write(write_index,addr)
+                row_index += 1
+            row_index = 2
+            for host in self.down_hosts:
+                addr = str(host)
+                write_index = alpha_index + str(row_index)
+                down_hosts_worksheet.write(write_index,addr)
+                row_index += 1
+            workbook.close()
+        except:
+            sys.exit(1)
 
     def InitializeHosts(self):
         try:
@@ -216,14 +278,19 @@ class Window(QWidget):
             self.target_network += self.target_network_address.text()
             self.target_network += "/"
             self.target_network += subnet_mask
-            self.hosts_to_scan = ipaddress.IPv4Network(self.target_network).hosts()
+            self.hosts_to_scan  = ipaddress.IPv4Network(self.target_network).hosts()
         except Exception as e:
-            logging.info('%s' % e)
             sys.exit(1)
 
     def ResetTable(self):
-
-        return
+        self.live_hosts = []
+        self.down_hosts = []
+        for row in range(self.tableWidget.rowCount()-1):
+            try:
+                self.tableWidget.removeRow(self.tableWidget.rowCount()-1)
+                self.tableWidget.update()
+            except:
+                sys.exit(1)
 
     def SetStatusAlive(self,addr):
         self.live_hosts.append(addr)
