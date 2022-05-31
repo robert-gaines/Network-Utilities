@@ -63,16 +63,13 @@ class Ping():
             pass
 
     def ContinuousPingVolley(self):
-        current_threads = []
         try:
             while(True):
                 for i in range(0,self.thread_count):
                     try:
                         t = threading.Thread(target=self.SendPing)
+                        t.daemon = True
                         t.start()
-                        current_threads.append(t)
-                        for current_thread in current_threads:
-                            current_thread.join()
                     except:
                         pass
         except KeyboardInterrupt:
